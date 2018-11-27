@@ -1,0 +1,12 @@
+# find your keys at https://console.phaxio.com/api_credentials
+# need to be registered
+
+# live API
+live:
+  key: angg2nzwbio7zus893tcp8qj0tmo01qirz9qb62u
+  secret: 7zfb8y6ru34p28wcix3b5y6tpo4gqlurpp3s5xei
+
+# test API
+test:
+  key: 0brl7npdhy06douz5mpaqztk52sb5ibzby886xyj
+  secret: 9yap7z9v5awf0uh7ssb8xztq68gig1nnokgn0yeb

@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+
+# phaxio api to use (only tested with v2.1)
+PHAXIO_API="v2.1"
+
+# usage/help
+USAGE=$(cat <<EOF
+Bash script to send fax using Phaxio.com service.
+
+=== REQUIRED OPTIONS ===
+a) Path to API file. Must use YAML syntax. (e.g. see 'insert url')
+p) Phone to send the fax to. Need to specify the country code without
+   the '+' symbol.
+f) Path to the file to send.
+h) Show this message output.
+
+=== OPTIONAL ===
+t) Using the '-t' flag will use the 'test' APIs specified in the YAML file.
+
+=== EXEMPLES ==
+Send a .PDF to a number:
+        phaxio-cli -a ~/api.yml -p "12126647665" -f ~/test.pdf
+
+Same thing but using the test APIs:
+        phaxio-cli -a ~/api.yml -p "12126647665" -f ~/test.pdf -t
+EOF
+)
+
+# verify dependencies
+declare -a arr=("bash" "curl" "sed" "awk")
+for i in "${arr[@]}"; do
+  if [ -z "$(which $i)" ]; then
+    echo "$i not found. You need it for this script to work."
+    exit 1
+  fi
+done
+
+# function to parse yaml from:
+# https://gist.github.com/pkuczynski/8665367
+parse_yaml() {
+   local prefix=$2
+   local s='[[:space:]]*' w='[a-zA-Z0-9_]*' fs=$(echo @|tr @ '\034')
+   sed -ne "s|^\($s\)\($w\)$s:$s\"\(.*\)\"$s\$|\1$fs\2$fs\3|p" \
+        -e "s|^\($s\)\($w\)$s:$s\(.*\)$s\$|\1$fs\2$fs\3|p"  $1 |
+   awk -F$fs '{
+      indent = length($1)/2;
+      vname[indent] = $2;
+      for (i in vname) {if (i > indent) {delete vname[i]}}
+      if (length($3) > 0) {
+         vn=""; for (i=0; i<indent; i++) {vn=(vn)(vname[i])("_")}
+         printf("%s%s%s=\"%s\"\n", "'$prefix'",vn, $2, $3);
+      }
+   }'
+}
+
+api_variables() {
+    # read api keys from YAML "api.yml"
+    eval $(parse_yaml ~/dotfiles/secrets/phaxio/api.yml "api_")
+    if [ "$TESTMODE" == true ]; then
+        APIKEY="$api_test_key"
+        APISECRET="$api_test_secret"
+    else
+        APIKEY="$api_live_key"
+        APISECRET="$api_live_secret"
+    fi
+}
+
+# provide variables with flags
+while getopts "a:p:f:ht" OPTION; do
+  case ${OPTION} in
+    a)
+      APIFILE=${OPTARG}
+      [[ -z "$APIFILE" ]] && { echo "No file for API specified." ; exit 1; }
+      [[ ! -f "$APIFILE" ]] && { echo "Specified API file does not exist." ; exit 1; }
+      ;;
+    p)
+      PHONE=${OPTARG}
+      [[ -z "$PHONE" ]] && { echo "No phone specified." ; exit 1; }
+      ;;
+    f)
+      FILEPATH=${OPTARG}
+      [[ -z "$FILEPATH" ]] && { echo "No filepath specified." ; exit 1; }
+      ;;
+    t)
+      echo "TEST FAX MODE."
+      TESTMODE=true
+      APIKEY="$api_test_key"
+      APISECRET="$api_test_secret"
+      ;;
+    h)
+      echo "$USAGE"
+      exit 0
+      ;;
+    \?)
+      echo "Invalid option: -$OPTARG" >&2
+      exit 1
+      ;;
+  esac
+done
+
+if [[ -z "$APIFILE" || -z "$PHONE" || -z "$FILEPATH" ]]; then
+   echo "MISSING ARGUMENT! See how to use:"
+   echo "$USAGE"
+fi
+
+# send fax
+api_variables
+curl https://api.phaxio.com/"$PHAXIO_API"/faxes \
+     -u "$APIKEY":"$APISECRET" \
+     -F "to=$PHONE" \
+     -F "file=@$FILEPATH"
